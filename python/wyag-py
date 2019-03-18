@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+
+import argparse
+import sys
+
+from libwyag import Repository
+
+
+def cmd_init(args):
+    Repository.create(args.path)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Write yourself a Git with Python")
+    cmd_parser = parser.add_subparsers(title="Commands", dest="command", required=True)
+
+    parser_init = cmd_parser.add_parser("init", help="Initialize a new, empty repository.")
+    parser_init.add_argument("path", metavar="directory", nargs="?", default=".", help="Where to create the repository.")
+
+    args = parser.parse_args(sys.argv[1:])
+    if args.command == "init" : cmd_init(args)
