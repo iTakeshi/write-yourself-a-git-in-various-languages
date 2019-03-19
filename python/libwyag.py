@@ -109,10 +109,19 @@ class BaseObject(object):
         if size != len(raw) - (delim_00 + 1):
             raise Exception("Malformed object %s: bad length" % sha)
 
-        if fmt == "blob": cls = Blob
+        cls = BaseObject.__get_cls(fmt)
+        return cls(repo, raw[delim_00+1:])
+
+    @staticmethod
+    def __get_cls(fmt):
+        if fmt == "blob": return Blob
         else: raise Exception("Unknown object type %s (sha: %s)" % (fmt, sha))
 
-        return cls(repo, raw[delim_00+1:])
+    @staticmethod
+    def create_from_file(repo, fmt, path):
+        data = pathlib.Path(path).read_bytes()
+        cls = BaseObject.__get_cls(fmt)
+        return cls(repo, data).write(dry_run=(repo is None))
 
     def __init__(self, repo, data=None):
         self.repo = repo

@@ -15,6 +15,15 @@ def cmd_catfile(args):
     sys.stdout.buffer.write(obj.serialize())
 
 
+def cmd_hashobject(args):
+    sha = BaseObject.create_from_file(
+        Repository.find() if args.write else None,
+        args.type,
+        args.path,
+        )
+    print(sha)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Write yourself a Git with Python")
     cmd_parser = parser.add_subparsers(title="Commands", dest="command", required=True)
@@ -26,6 +35,12 @@ if __name__ == "__main__":
     parser_catfile.add_argument("type", metavar="type", choices=["blob", "commit", "tag", "tree"], help="Specify the type.")
     parser_catfile.add_argument("object", metavar="object", help="The object to display.")
 
+    parser_hashobject = cmd_parser.add_parser("hash-object", help="Compute object ID and optionally creates a blob from a file")
+    parser_hashobject.add_argument("-t", metavar="type", dest="type", choices=["blob", "commit", "tag", "tree"], default="blob", help="Specify the type.")
+    parser_hashobject.add_argument("-w", dest="write", action="store_true", help="Actually write the object into the database.")
+    parser_hashobject.add_argument("path", help="Read object from <file>.")
+
     args = parser.parse_args(sys.argv[1:])
-    if   args.command == "init"     : cmd_init(args)
-    elif args.command == "cat-file" : cmd_catfile(args)
+    if   args.command == "init"        : cmd_init(args)
+    elif args.command == "cat-file"    : cmd_catfile(args)
+    elif args.command == "hash-object" : cmd_hashobject(args)
