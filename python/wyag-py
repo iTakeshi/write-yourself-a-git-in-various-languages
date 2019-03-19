@@ -3,11 +3,16 @@
 import argparse
 import sys
 
-from libwyag import Repository
+from libwyag import Repository, BaseObject
 
 
 def cmd_init(args):
     Repository.create(args.path)
+
+
+def cmd_catfile(args):
+    obj = BaseObject.read(Repository.find(), args.object)
+    sys.stdout.buffer.write(obj.serialize())
 
 
 if __name__ == "__main__":
@@ -17,5 +22,10 @@ if __name__ == "__main__":
     parser_init = cmd_parser.add_parser("init", help="Initialize a new, empty repository.")
     parser_init.add_argument("path", metavar="directory", nargs="?", default=".", help="Where to create the repository.")
 
+    parser_catfile = cmd_parser.add_parser("cat-file", help="Provide content of repository objects.")
+    parser_catfile.add_argument("type", metavar="type", choices=["blob", "commit", "tag", "tree"], help="Specify the type.")
+    parser_catfile.add_argument("object", metavar="object", help="The object to display.")
+
     args = parser.parse_args(sys.argv[1:])
-    if args.command == "init" : cmd_init(args)
+    if   args.command == "init"     : cmd_init(args)
+    elif args.command == "cat-file" : cmd_catfile(args)

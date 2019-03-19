@@ -1,6 +1,8 @@
 import configparser
 import functools
+import hashlib
 import pathlib
+import zlib
 
 
 class Repository(object):
@@ -32,6 +34,21 @@ class Repository(object):
             res.set("core", "bare", "false")
             res.write(f)
 
+    @classmethod
+    def find(cls, path=pathlib.Path("."), required=True):
+        path = pathlib.Path(path)
+        if (path / ".git").is_dir():
+            return cls(path)
+
+        parent = path.resolve().parent
+        if parent == path: # filesystem root
+            if required:
+                raise Exception("Not a Git reposiory: %s" % path)
+            else:
+                return None
+        else:
+            return cls.find(parent)
+
     def __init__(self, path, force=False):
         self.worktree = pathlib.Path(path)
         self.gitdir = self.worktree / ".git"
@@ -59,6 +76,9 @@ class Repository(object):
         else:
             return None
 
+    def object(self, sha, mkdir=False):
+        return self.file("objects", sha[:2], sha[2:], mkdir=mkdir)
+
     def dir(self, *path, mkdir=False):
         path = self.__path(*path)
         if path.exists():
@@ -72,3 +92,59 @@ class Repository(object):
                 return path
             else:
                 return None
+
+
+class BaseObject(object):
+    fmt = "base"
+
+    @staticmethod
+    def read(repo, sha):
+        path = repo.object(sha)
+        raw = zlib.decompress(path.read_bytes())
+
+        delim_20 = raw.find(b"\x20")
+        delim_00 = raw.find(b"\x00")
+        fmt = raw[:delim_20].decode("ascii")
+        size= int(raw[delim_20:delim_00].decode("ascii"))
+        if size != len(raw) - (delim_00 + 1):
+            raise Exception("Malformed object %s: bad length" % sha)
+
+        if fmt == "blob": cls = Blob
+        else: raise Exception("Unknown object type %s (sha: %s)" % (fmt, sha))
+
+        return cls(repo, raw[delim_00+1:])
+
+    def __init__(self, repo, data=None):
+        self.repo = repo
+        if not data is None:
+            self.deserialize(data)
+
+    def serialize(self):
+        raise NotImplementedError
+
+    def deserialize(self, data):
+        raise NotImplementedError
+
+    def write(self, dry_run=False):
+        if self.fmt == "base":
+            raise NotImplementedError
+
+        data = self.serialize()
+        data = (self.fmt + " " + str(len(data)) + "\x00").encode() + data
+        sha = hashlib.sha1(data).hexdigest()
+
+        if not dry_run:
+            path = self.repo.object(sha, mkdir=True)
+            path.write_bytes(zlib.compress(data))
+
+        return sha
+
+
+class Blob(BaseObject):
+    fmt = "blob"
+
+    def serialize(self):
+        return self.data
+
+    def deserialize(self, data):
+        self.data = data
