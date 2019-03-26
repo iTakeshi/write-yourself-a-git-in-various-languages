@@ -1,3 +1,4 @@
+import collections
 import configparser
 import functools
 import hashlib
@@ -94,6 +95,52 @@ class Repository(object):
                 return None
 
 
+class BaseKVLM(object):
+    def serialize(self):
+        res = ""
+
+        for k, v in self.dct.items():
+            if k == "":
+                continue
+            if type(v) != list:
+                v = [v]
+
+            for e in v:
+                res += k + "\x20" + (e.replace("\x0a", "\x0a\x20")) + "\x0a"
+
+        res += "\x0a" + self.dct[""]
+        return res.encode()
+
+    def deserialize(self, raw):
+        def inner(start=0, dct=None):
+            if dct is None:
+                dct = collections.OrderedDict()
+
+            delim_20 = raw.find(b"\x20", start)
+            delim_0a = raw.find(b"\x0a", start)
+            if start == delim_0a:
+                dct[""] = raw[start+1:].decode("ascii")
+                return dct
+
+            key = raw[start : delim_20].decode("ascii")
+            end = delim_0a
+            while end < len(raw) - 1 and raw[end+1] == b" ":
+                end = raw.find(b"\x0a", end + 1)
+            value = raw[delim_20+1 : end].replace(b"\x0a\x20", b"\x0a").decode("ascii")
+
+            if key in dct:
+                if type(dct[key]) == list:
+                    dct[key].append(value)
+                else:
+                    dct[key] = [dc[key], value]
+            else:
+                dct[key] = value
+
+            return inner(start=end+1, dct=dct)
+
+        self.dct = inner()
+
+
 class BaseObject(object):
     fmt = "base"
 
@@ -110,11 +157,12 @@ class BaseObject(object):
             raise Exception("Malformed object %s: bad length" % sha)
 
         cls = BaseObject.__get_cls(fmt)
-        return cls(repo, raw[delim_00+1:])
+        return cls(repo, sha, raw[delim_00+1:])
 
     @staticmethod
     def __get_cls(fmt):
-        if fmt == "blob": return Blob
+        if   fmt == "blob"   : return Blob
+        elif fmt == "commit" : return Commit
         else: raise Exception("Unknown object type %s (sha: %s)" % (fmt, sha))
 
     @staticmethod
@@ -123,8 +171,9 @@ class BaseObject(object):
         cls = BaseObject.__get_cls(fmt)
         return cls(repo, data).write(dry_run=(repo is None))
 
-    def __init__(self, repo, data=None):
+    def __init__(self, repo, sha, data=None):
         self.repo = repo
+        self.sha = sha
         if not data is None:
             self.deserialize(data)
 
@@ -157,3 +206,22 @@ class Blob(BaseObject):
 
     def deserialize(self, data):
         self.data = data
+
+
+class Commit(BaseKVLM, BaseObject):
+    fmt = "commit"
+
+    @property
+    def headline(self):
+        return self.dct[""][:self.dct[""].find("\x0a")]
+
+    @property
+    def parents(self):
+        if not "parent" in self.dct.keys():
+            return []
+
+        parents = self.dct["parent"]
+        if type(parents) != list:
+            parents = [parents]
+
+        return [BaseObject.read(self.repo, p) for p in parents]
