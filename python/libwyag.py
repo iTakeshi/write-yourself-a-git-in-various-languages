@@ -15,7 +15,7 @@ class Repository(object):
         if repo.worktree.exists():
             if not repo.worktree.is_dir():
                 raise Exception("Not a directory (file exists): %s" % repo.worktree)
-            if list(repo.worktree.glob('*')):
+            if list(repo.worktree.glob("*")):
                 raise Exception("Not a empty directory: %s" % repo.worktree)
         else:
             repo.worktree.mkdir(parents=True)
@@ -163,6 +163,7 @@ class BaseObject(object):
     def __get_cls(fmt):
         if   fmt == "blob"   : return Blob
         elif fmt == "commit" : return Commit
+        elif fmt == "tree"   : return Tree
         else: raise Exception("Unknown object type %s (sha: %s)" % (fmt, sha))
 
     @staticmethod
@@ -225,3 +226,40 @@ class Commit(BaseKVLM, BaseObject):
             parents = [parents]
 
         return [BaseObject.read(self.repo, p) for p in parents]
+
+
+class TreeEntry(object):
+    @classmethod
+    def read(cls, raw):
+        delim_20 = raw.find(b"\x20")
+        delim_00 = raw.find(b"\x00")
+
+        mode = raw[:delim_20].decode("ascii")
+        path = raw[delim_20+1 : delim_00].decode("ascii")
+        sha = hex(int.from_bytes(raw[delim_00+1 : delim_00+21], "big"))[2:] # [2:] drops `0x`
+
+        return delim_00 + 21, cls(mode, path, sha)
+
+    def __init__(self, mode, path, sha):
+        self.mode = mode
+        self.path = path
+        self.sha = sha
+
+
+class Tree(BaseObject):
+    fmt = "tree"
+
+    def serialize(self):
+        res = b""
+        for e in self.entries:
+            res += (e.mode + "\x20" + e.path + "\x00").encode()
+            res += int(e.sha, 16).to_bytes(20, byteorder="big")
+        return res
+
+    def deserialize(self, raw):
+        self.entries = []
+        pos = 0
+        while pos < len(raw):
+            length, entry = TreeEntry.read(raw[pos:])
+            pos += length
+            self.entries.append(entry)

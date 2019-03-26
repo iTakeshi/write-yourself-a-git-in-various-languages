@@ -40,6 +40,23 @@ def cmd_log(args):
     inner(BaseObject.read(repo, args.commit))
 
 
+def cmd_ls_tree(args):
+    repo = Repository.find()
+
+    obj = BaseObject.read(repo, args.object)
+    if obj.fmt != "tree":
+        raise Exception("ls-tree is only for tree object.")
+
+    # TODO: git ls-tree shows the entries in current dir
+    for e in obj.entries:
+        print("%s %s %s\t%s" % (
+            "0" * (6 - len(e.mode)) + e.mode,
+            BaseObject.read(repo, e.sha).fmt,
+            e.sha,
+            e.path,
+            ))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Write yourself a Git with Python")
     cmd_parser = parser.add_subparsers(title="Commands", dest="command", required=True)
@@ -59,8 +76,12 @@ if __name__ == "__main__":
     parser_log = cmd_parser.add_parser("log", help="Display history of a given commit.")
     parser_log.add_argument("commit", default="HEAD", nargs="?", help="Commit to start at.")
 
+    parser_ls_tree = cmd_parser.add_parser("ls-tree", help="Pretty-print a tree object.")
+    parser_ls_tree.add_argument("object", help="The object to show.")
+
     args = parser.parse_args(sys.argv[1:])
     if   args.command == "init"        : cmd_init(args)
     elif args.command == "cat-file"    : cmd_catfile(args)
     elif args.command == "hash-object" : cmd_hashobject(args)
     elif args.command == "log"         : cmd_log(args)
+    elif args.command == "ls-tree"     : cmd_ls_tree(args)
