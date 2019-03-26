@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import pathlib
 import sys
 
 from libwyag import Repository, BaseObject
@@ -57,6 +58,35 @@ def cmd_ls_tree(args):
             ))
 
 
+def cmd_checkout(args):
+    repo = Repository.find()
+
+    def inner(root, tree):
+        for e in tree.entries:
+            obj = BaseObject.read(repo, e.sha)
+            path = root / e.path
+            if obj.fmt == "tree":
+                path.mkdir()
+                inner(path, obj)
+            elif obj.fmt == "blob":
+                path.write_bytes(obj.serialize())
+
+    root = pathlib.Path(args.path)
+    if not root.exists():
+        root.mkdir()
+    if root.is_dir():
+        if list(root.glob("*")):
+            raise Exception("Not a empty directory: %s" % root)
+        else:
+            obj = BaseObject.read(repo, args.object)
+            if obj.fmt == "tree":
+                inner(root, obj)
+            elif obj.fmt == "commit":
+                inner(root, BaseObject.read(repo, obj.tree_sha))
+    else:
+        raise Exception("Not a directory (file exists): %s" % root)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Write yourself a Git with Python")
     cmd_parser = parser.add_subparsers(title="Commands", dest="command", required=True)
@@ -79,9 +109,14 @@ if __name__ == "__main__":
     parser_ls_tree = cmd_parser.add_parser("ls-tree", help="Pretty-print a tree object.")
     parser_ls_tree.add_argument("object", help="The object to show.")
 
+    parser_checkout = cmd_parser.add_parser("checkout", help="Checkout a commit inside of a directory.")
+    parser_checkout.add_argument("object", help="The commit or tree to checkout.")
+    parser_checkout.add_argument("path", help="The EMPTY directory to checkout on.")
+
     args = parser.parse_args(sys.argv[1:])
     if   args.command == "init"        : cmd_init(args)
     elif args.command == "cat-file"    : cmd_catfile(args)
     elif args.command == "hash-object" : cmd_hashobject(args)
     elif args.command == "log"         : cmd_log(args)
     elif args.command == "ls-tree"     : cmd_ls_tree(args)
+    elif args.command == "checkout"    : cmd_checkout(args)

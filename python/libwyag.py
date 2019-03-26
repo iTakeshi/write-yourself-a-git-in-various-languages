@@ -217,6 +217,10 @@ class Commit(BaseKVLM, BaseObject):
         return self.dct[""][:self.dct[""].find("\x0a")]
 
     @property
+    def tree_sha(self):
+        return self.dct["tree"]
+
+    @property
     def parents(self):
         if not "parent" in self.dct.keys():
             return []
