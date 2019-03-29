@@ -95,52 +95,6 @@ class Repository(object):
                 return None
 
 
-class BaseKVLM(object):
-    def serialize(self):
-        res = ""
-
-        for k, v in self.dct.items():
-            if k == "":
-                continue
-            if type(v) != list:
-                v = [v]
-
-            for e in v:
-                res += k + "\x20" + (e.replace("\x0a", "\x0a\x20")) + "\x0a"
-
-        res += "\x0a" + self.dct[""]
-        return res.encode()
-
-    def deserialize(self, raw):
-        def inner(start=0, dct=None):
-            if dct is None:
-                dct = collections.OrderedDict()
-
-            delim_20 = raw.find(b"\x20", start)
-            delim_0a = raw.find(b"\x0a", start)
-            if start == delim_0a:
-                dct[""] = raw[start+1:].decode("ascii")
-                return dct
-
-            key = raw[start : delim_20].decode("ascii")
-            end = delim_0a
-            while end < len(raw) - 1 and raw[end+1] == b" ":
-                end = raw.find(b"\x0a", end + 1)
-            value = raw[delim_20+1 : end].replace(b"\x0a\x20", b"\x0a").decode("ascii")
-
-            if key in dct:
-                if type(dct[key]) == list:
-                    dct[key].append(value)
-                else:
-                    dct[key] = [dc[key], value]
-            else:
-                dct[key] = value
-
-            return inner(start=end+1, dct=dct)
-
-        self.dct = inner()
-
-
 class BaseObject(object):
     fmt = "base"
 
@@ -209,7 +163,7 @@ class Blob(BaseObject):
         self.data = data
 
 
-class Commit(BaseKVLM, BaseObject):
+class Commit(BaseObject):
     fmt = "commit"
 
     @property
@@ -230,6 +184,51 @@ class Commit(BaseKVLM, BaseObject):
             parents = [parents]
 
         return [BaseObject.read(self.repo, p) for p in parents]
+
+
+    def serialize(self):
+        res = ""
+
+        for k, v in self.dct.items():
+            if k == "":
+                continue
+            if type(v) != list:
+                v = [v]
+
+            for e in v:
+                res += k + "\x20" + (e.replace("\x0a", "\x0a\x20")) + "\x0a"
+
+        res += "\x0a" + self.dct[""]
+        return res.encode()
+
+    def deserialize(self, raw):
+        def inner(start=0, dct=None):
+            if dct is None:
+                dct = collections.OrderedDict()
+
+            delim_20 = raw.find(b"\x20", start)
+            delim_0a = raw.find(b"\x0a", start)
+            if start == delim_0a:
+                dct[""] = raw[start+1:].decode("ascii")
+                return dct
+
+            key = raw[start : delim_20].decode("ascii")
+            end = delim_0a
+            while end < len(raw) - 1 and raw[end+1] == b" ":
+                end = raw.find(b"\x0a", end + 1)
+            value = raw[delim_20+1 : end].replace(b"\x0a\x20", b"\x0a").decode("ascii")
+
+            if key in dct:
+                if type(dct[key]) == list:
+                    dct[key].append(value)
+                else:
+                    dct[key] = [dc[key], value]
+            else:
+                dct[key] = value
+
+            return inner(start=end+1, dct=dct)
+
+        self.dct = inner()
 
 
 class TreeEntry(object):
