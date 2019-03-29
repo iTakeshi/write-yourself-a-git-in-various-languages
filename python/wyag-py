@@ -87,15 +87,31 @@ def cmd_checkout(args):
         raise Exception("Not a directory (file exists): %s" % root)
 
 
-def cmd_show_ref(args):
-    def inner(refs, prefix=""):
-        for k, v in refs.items():
-            child = (prefix + "/" if len(prefix) > 0 else "") + k
-            if type(v) == str:
+def show_ref_inner(refs, prefix="", only_tags=False, show_path=True):
+    for k, v in refs.items():
+        child = (prefix + "/" if len(prefix) > 0 else "") + k
+        if type(v) == str:
+            if show_path:
                 print("%s %s" % (v, child))
             else:
-                inner(v, child)
-    inner(Ref.find_all(Repository.find()), prefix="refs")
+                print(k)
+        else:
+            show_ref_inner(v, child)
+
+
+def cmd_show_ref(args):
+    show_ref_inner(Ref.find_all(Repository.find()), prefix="refs")
+
+
+def cmd_tag(args):
+    repo = Repository.find()
+    if args.name:
+        if args.create_tag_object:
+            Tag.create_object(repo, args.name, args.object)
+        else:
+            Tag.create_ref(repo, args.name, args.object)
+    else:
+        show_ref_inner(Ref.find_all(repo)["tags"], prefix="refs/tags", only_tags=True, show_path=False)
 
 
 if __name__ == "__main__":
@@ -126,6 +142,11 @@ if __name__ == "__main__":
 
     parser_show_ref = cmd_parser.add_parser("show-ref", help="List references.")
 
+    parser_tag = cmd_parser.add_parser("tag", help="List and create tags.")
+    parser_tag.add_argument("-a", dest="create_tag_object", action="store_true", help="Whether to create a tag object.")
+    parser_tag.add_argument("name", nargs="?", help="The new tag's name.")
+    parser_tag.add_argument("object", nargs="?", help="The object the new tag will point to.")
+
     args = parser.parse_args(sys.argv[1:])
     if   args.command == "init"        : cmd_init(args)
     elif args.command == "cat-file"    : cmd_catfile(args)
@@ -134,3 +155,4 @@ if __name__ == "__main__":
     elif args.command == "ls-tree"     : cmd_ls_tree(args)
     elif args.command == "checkout"    : cmd_checkout(args)
     elif args.command == "show-ref"    : cmd_show_ref(args)
+    elif args.command == "tag"         : cmd_tag(args)

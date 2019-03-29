@@ -117,6 +117,7 @@ class BaseObject(object):
     def __get_cls(fmt):
         if   fmt == "blob"   : return Blob
         elif fmt == "commit" : return Commit
+        elif fmt == "tag"    : return Tag
         elif fmt == "tree"   : return Tree
         else: raise Exception("Unknown object type %s (sha: %s)" % (fmt, sha))
 
@@ -229,6 +230,18 @@ class Commit(BaseObject):
             return inner(start=end+1, dct=dct)
 
         self.dct = inner()
+
+
+class Tag(Commit):
+    fmt = "tag"
+
+    @classmethod
+    def create_object(repo, name, sha):
+        raise NotImplementedError
+
+    @classmethod
+    def create_ref(repo, name, sha):
+        repo.file("refs", "tags", "name").write_text("%s\n" % sha)
 
 
 class TreeEntry(object):
