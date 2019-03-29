@@ -114,6 +114,10 @@ def cmd_tag(args):
         show_ref_inner(Ref.find_all(repo)["tags"], prefix="refs/tags", only_tags=True, show_path=False)
 
 
+def cmd_rev_parse(args):
+    print(Repository.find().object_find(args.name, fmt=args.type))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Write yourself a Git with Python")
     cmd_parser = parser.add_subparsers(title="Commands", dest="command", required=True)
@@ -147,6 +151,10 @@ if __name__ == "__main__":
     parser_tag.add_argument("name", nargs="?", help="The new tag's name.")
     parser_tag.add_argument("object", nargs="?", help="The object the new tag will point to.")
 
+    parser_rev_parse = cmd_parser.add_parser("rev-parse", help="Parse revision (or other objects) identifiers.")
+    parser_rev_parse.add_argument("--wyag-type", metavar="type", dest="type", choices=["blob", "commit", "tag", "tree"], default=None, help="Specify the expected type.")
+    parser_rev_parse.add_argument("name", help="The name to parse.")
+
     args = parser.parse_args(sys.argv[1:])
     if   args.command == "init"        : cmd_init(args)
     elif args.command == "cat-file"    : cmd_catfile(args)
@@ -156,3 +164,4 @@ if __name__ == "__main__":
     elif args.command == "checkout"    : cmd_checkout(args)
     elif args.command == "show-ref"    : cmd_show_ref(args)
     elif args.command == "tag"         : cmd_tag(args)
+    elif args.command == "rev-parse"   : cmd_rev_parse(args)

@@ -3,6 +3,7 @@ import configparser
 import functools
 import hashlib
 import pathlib
+import re
 import zlib
 
 
@@ -80,6 +81,59 @@ class Repository(object):
     def object(self, sha, mkdir=False):
         return self.file("objects", sha[:2], sha[2:], mkdir=mkdir)
 
+    def object_find(self, name, fmt=None):
+        name = name.strip()
+        sha = None
+
+        if name == "HEAD":
+            sha = Ref.resolve(self, "HEAD")
+
+        if re.match(r"^[0-9A-Fa-f]{4,40}$", name):
+            if len(name) == 40:
+                sha = name.lower()
+            else:
+                prefix = name[:2].lower()
+                body = name[2:].lower()
+                candidates = [
+                    prefix + p.name
+                    for p in self.dir("objects", prefix).glob("*")
+                    if p.name.startswith(body)
+                    ]
+                if len(candidates) == 0:
+                    raise Exception("Short hash doesn't match any object: %s" % name)
+                elif len(candidates) == 1:
+                    sha = candidates[0]
+                else:
+                    raise Exception("Ambiguous short hash: %s" % name)
+
+        def inner(refs):
+            res = None
+            for k, v in refs.items():
+                if k == name and type(v) == str:
+                    res = v
+                elif type(v) == collections.OrderedDict:
+                    res = res or inner(v)
+            return res
+        sha = inner(Ref.find_all(self))
+
+        if sha is None:
+            raise Exception("name `%s` doesn't match any object." % name)
+
+        if fmt is None:
+            return sha
+        else:
+            def inner(sha):
+                obj = BaseObject.read(self, sha)
+                if obj.fmt == fmt:
+                    return obj.sha
+                elif obj.fmt == "tag":
+                    return inner(obj.object_sha)
+                elif obj.fmt == "commit" and fmt == "tree":
+                    return inner(obj.tree_sha)
+                else:
+                    raise Exception("No matched object with type %s: %s" % (fmt, name))
+            return inner(sha)
+
     def dir(self, *path, mkdir=False):
         path = self.__path(*path)
         if path.exists():
@@ -99,7 +153,8 @@ class BaseObject(object):
     fmt = "base"
 
     @staticmethod
-    def read(repo, sha):
+    def read(repo, name):
+        sha = repo.object_find(name)
         path = repo.object(sha)
         raw = zlib.decompress(path.read_bytes())
 
@@ -242,6 +297,10 @@ class Tag(Commit):
     @classmethod
     def create_ref(repo, name, sha):
         repo.file("refs", "tags", "name").write_text("%s\n" % sha)
+
+    @property
+    def object_sha(self):
+        return self.dct["object"]
 
 
 class TreeEntry(object):
