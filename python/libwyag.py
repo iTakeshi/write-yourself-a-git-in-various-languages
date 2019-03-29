@@ -267,3 +267,27 @@ class Tree(BaseObject):
             length, entry = TreeEntry.read(raw[pos:])
             pos += length
             self.entries.append(entry)
+
+
+class Ref(object):
+    @staticmethod
+    def resolve(repo, path):
+        ref = repo.file(path).read_text().strip()
+        if ref.startswith("ref:"):
+            return Ref.resolve(repo, ref[5:])
+        else:
+            return ref
+
+    @staticmethod
+    def find_all(repo, path=None):
+        if path is None:
+            path = repo.dir("refs")
+
+        res = collections.OrderedDict()
+        for p in sorted(path.glob("*")):
+            if p.is_dir():
+                res[p.name] = Ref.find_all(repo, p)
+            else:
+                res[p.name] = Ref.resolve(repo, p)
+
+        return res

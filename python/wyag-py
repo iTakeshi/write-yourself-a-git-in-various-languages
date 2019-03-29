@@ -4,7 +4,7 @@ import argparse
 import pathlib
 import sys
 
-from libwyag import Repository, BaseObject
+from libwyag import Repository, BaseObject, Ref
 
 
 def cmd_init(args):
@@ -87,6 +87,17 @@ def cmd_checkout(args):
         raise Exception("Not a directory (file exists): %s" % root)
 
 
+def cmd_show_ref(args):
+    def inner(refs, prefix=""):
+        for k, v in refs.items():
+            child = (prefix + "/" if len(prefix) > 0 else "") + k
+            if type(v) == str:
+                print("%s %s" % (v, child))
+            else:
+                inner(v, child)
+    inner(Ref.find_all(Repository.find()), prefix="refs")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Write yourself a Git with Python")
     cmd_parser = parser.add_subparsers(title="Commands", dest="command", required=True)
@@ -113,6 +124,8 @@ if __name__ == "__main__":
     parser_checkout.add_argument("object", help="The commit or tree to checkout.")
     parser_checkout.add_argument("path", help="The EMPTY directory to checkout on.")
 
+    parser_show_ref = cmd_parser.add_parser("show-ref", help="List references.")
+
     args = parser.parse_args(sys.argv[1:])
     if   args.command == "init"        : cmd_init(args)
     elif args.command == "cat-file"    : cmd_catfile(args)
@@ -120,3 +133,4 @@ if __name__ == "__main__":
     elif args.command == "log"         : cmd_log(args)
     elif args.command == "ls-tree"     : cmd_ls_tree(args)
     elif args.command == "checkout"    : cmd_checkout(args)
+    elif args.command == "show-ref"    : cmd_show_ref(args)
