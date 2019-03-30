@@ -7,6 +7,11 @@ import re
 import zlib
 
 
+def byte_to_hex(raw):
+    assert type(raw) == bytes and len(raw) == 20
+    return hex(int.from_bytes(raw, "big"))[2:] # [2:] drops `0x`
+
+
 class Repository(object):
     """A Git Repository"""
 
@@ -311,7 +316,7 @@ class TreeEntry(object):
 
         mode = raw[:delim_20].decode("ascii")
         path = raw[delim_20+1 : delim_00].decode("ascii")
-        sha = hex(int.from_bytes(raw[delim_00+1 : delim_00+21], "big"))[2:] # [2:] drops `0x`
+        sha = byte_to_hex(raw[delim_00+1 : delim_00+21])
 
         return delim_00 + 21, cls(mode, path, sha)
 
@@ -362,3 +367,148 @@ class Ref(object):
                 res[p.name] = Ref.resolve(repo, p)
 
         return res
+
+
+class IndexEntry(object):
+    def __init__(
+            self,
+            ctime_sec,
+            ctime_nsec,
+            mtime_sec,
+            mtime_nsec,
+            dev,
+            ino,
+            mode_type,
+            mode_perm,
+            uid,
+            gid,
+            size,
+            sha,
+            path,
+            ):
+        self.ctime_sec  = ctime_sec
+        self.ctime_nsec = ctime_nsec
+        self.mtime_sec  = mtime_sec
+        self.mtime_nsec = mtime_nsec
+        self.dev        = dev
+        self.ino        = ino
+        self.mode_type  = mode_type
+        self.mode_perm  = mode_perm
+        self.uid        = uid
+        self.gid        = gid
+        self.size       = size
+        self.sha        = sha
+        self.path       = path
+
+    def __str__(self):
+        def permission(raw):
+            def inner(raw):
+                return str(int(raw[0]) * 4 + int(raw[1]) * 2 + int(raw[2]))
+            return inner(raw[:3]) + inner(raw[3:6]) + inner(raw[6:])
+
+        return "%20.9f %20.9f %4d %10d %s %s %4d %4d %6d %s\t%s" % (
+            self.ctime_sec + self.ctime_nsec * 1e-9,
+            self.mtime_sec + self.mtime_nsec * 1e-9,
+            self.dev,
+            self.ino,
+            bin(self.mode_type)[2:],
+            permission(bin(self.mode_perm)[2:]),
+            self.uid,
+            self.gid,
+            self.size,
+            self.sha,
+            self.path,
+            )
+
+
+class IndexExtTreeEntry(object):
+    def __init__(
+            self,
+            path,
+            num_entry,
+            num_tree,
+            sha,
+            ):
+        self.path      = path
+        self.num_entry = num_entry
+        self.num_tree  = num_tree
+        self.sha       = sha
+
+    def __str__(self):
+        return "% 4d % 3d %s\t%s" % (self.num_entry, self.num_tree, self.sha, self.path)
+
+
+class Index(object):
+    # https://github.com/git/git/blob/master/Documentation/technical/index-format.txt
+    @classmethod
+    def read(cls, repo):
+        raw = repo.file("index").read_bytes()
+
+        # header
+        assert raw[:4] == b"DIRC"
+        version = int.from_bytes(raw[4:8], "big")
+        assert version == 2
+        count = int.from_bytes(raw[8:12], "big")
+
+        # checksum
+        assert hashlib.sha1(raw[:-20]).digest() == raw[-20:]
+
+        # body
+        offset = 12
+        entries = []
+        for i in range(count):
+            delim_00 = raw.find(b"\x00", offset + 62)
+            entries.append(IndexEntry(
+                int.from_bytes(raw[ offset+ 0 : offset+ 4 ], "big")        , # ctime_sec
+                int.from_bytes(raw[ offset+ 4 : offset+ 8 ], "big")        , # ctime_nsec
+                int.from_bytes(raw[ offset+ 8 : offset+12 ], "big")        , # mtime_sec
+                int.from_bytes(raw[ offset+12 : offset+16 ], "big")        , # mtime_nsec
+                int.from_bytes(raw[ offset+16 : offset+20 ], "big")        , # dev
+                int.from_bytes(raw[ offset+20 : offset+24 ], "big")        , # ino
+                int.from_bytes(raw[ offset+26 : offset+27 ], "big") >> 4   , # mode_type
+                int.from_bytes(raw[ offset+26 : offset+28 ], "big") & 0x1ff, # mode_perm
+                int.from_bytes(raw[ offset+28 : offset+32 ], "big")        , # uid
+                int.from_bytes(raw[ offset+32 : offset+36 ], "big")        , # gid
+                int.from_bytes(raw[ offset+36 : offset+40 ], "big")        , # size
+                byte_to_hex(raw[offset+40 : offset+60])                    , # sha
+                raw[offset+62 : delim_00].decode()                         , # path
+                ))
+            offset = (8 - (delim_00 - offset) % 8) + delim_00
+
+        # extensions
+        tree = None
+        while True:
+            try:
+                etype = raw[offset : offset+4].decode()
+            except: # error in ascii decoding == assume the beginning of the SHA checksum
+                break
+            size = int.from_bytes(raw[ offset+4 : offset+8 ], "big")
+            offset += 8
+            endmark = offset + size
+
+            if etype == "TREE":
+                tree = []
+                while offset < endmark:
+                    delim_00 = raw.find(b"\x00", offset)
+                    delim_20 = raw.find(b"\x20", delim_00)
+                    delim_0a = raw.find(b"\x0a", delim_00)
+                    path = raw[offset : delim_00].decode()
+                    num_entry = int(raw[delim_00+1 : delim_20].decode())
+                    num_tree = int(raw[delim_20+1 : delim_0a].decode())
+                    if num_entry == -1:
+                        tree.append(IndexExtTreeEntry(path, num_entry, num_tree, None))
+                        offset = delim_0a + 1
+                    else:
+                        tree.append(IndexExtTreeEntry(
+                            path, num_entry, num_tree,
+                            byte_to_hex(raw[delim_0a+1 : delim_0a+21]),
+                            ))
+                        offset = delim_0a + 21
+
+            assert offset == endmark
+
+        return cls(entries, tree)
+
+    def __init__(self, entries, tree):
+        self.entries = entries
+        self.tree = tree

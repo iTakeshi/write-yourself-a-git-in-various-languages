@@ -4,7 +4,7 @@ import argparse
 import pathlib
 import sys
 
-from libwyag import Repository, BaseObject, Ref
+from libwyag import Repository, BaseObject, Ref, Index
 
 
 def cmd_init(args):
@@ -118,6 +118,21 @@ def cmd_rev_parse(args):
     print(Repository.find().object_find(args.name, fmt=args.type))
 
 
+def cmd_cat_index(args):
+    index = Index.read(Repository.find())
+
+    print("Entries")
+    for e in index.entries:
+        print(e)
+    print()
+
+    if not index.tree is None:
+        print("TREE")
+        for e in index.tree:
+            print(e)
+        print()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Write yourself a Git with Python")
     cmd_parser = parser.add_subparsers(title="Commands", dest="command", required=True)
@@ -155,6 +170,8 @@ if __name__ == "__main__":
     parser_rev_parse.add_argument("--wyag-type", metavar="type", dest="type", choices=["blob", "commit", "tag", "tree"], default=None, help="Specify the expected type.")
     parser_rev_parse.add_argument("name", help="The name to parse.")
 
+    parser_cat_index = cmd_parser.add_parser("cat-index", help="Show contents of .git/index.")
+
     args = parser.parse_args(sys.argv[1:])
     if   args.command == "init"        : cmd_init(args)
     elif args.command == "cat-file"    : cmd_catfile(args)
@@ -165,3 +182,4 @@ if __name__ == "__main__":
     elif args.command == "show-ref"    : cmd_show_ref(args)
     elif args.command == "tag"         : cmd_tag(args)
     elif args.command == "rev-parse"   : cmd_rev_parse(args)
+    elif args.command == "cat-index"   : cmd_cat_index(args)
