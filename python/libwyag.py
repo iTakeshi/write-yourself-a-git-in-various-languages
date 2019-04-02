@@ -92,8 +92,7 @@ class Repository(object):
 
         if name == "HEAD":
             sha = Ref.resolve(self, "HEAD")
-
-        if re.match(r"^[0-9A-Fa-f]{4,40}$", name):
+        elif re.match(r"^[0-9A-Fa-f]{4,40}$", name):
             if len(name) == 40:
                 sha = name.lower()
             else:
@@ -110,16 +109,16 @@ class Repository(object):
                     sha = candidates[0]
                 else:
                     raise Exception(f"Ambiguous short hash: {name}")
-
-        def inner(refs):
-            res = None
-            for k, v in refs.items():
-                if k == name and type(v) == str:
-                    res = v
-                elif type(v) == collections.OrderedDict:
-                    res = res or inner(v)
-            return res
-        sha = inner(Ref.find_all(self))
+        else:
+            def inner(refs):
+                res = None
+                for k, v in refs.items():
+                    if k == name and type(v) == str:
+                        res = v
+                    elif type(v) == collections.OrderedDict:
+                        res = res or inner(v)
+                return res
+            sha = inner(Ref.find_all(self))
 
         if sha is None:
             raise Exception(f"name `{name}` doesn't match any object.")
