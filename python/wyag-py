@@ -33,7 +33,7 @@ def cmd_log(args):
             return
         seen.append(commit.sha)
 
-        print("%s: %s" % (commit.sha[:7], commit.headline))
+        print(f"{commit.sha[:7]}: {commit.headline}")
 
         for p in commit.parents:
             inner(p, seen)
@@ -76,7 +76,7 @@ def cmd_checkout(args):
         root.mkdir()
     if root.is_dir():
         if list(root.glob("*")):
-            raise Exception("Not a empty directory: %s" % root)
+            raise Exception("Not a empty directory: {root}")
         else:
             obj = BaseObject.read(repo, args.object)
             if obj.fmt == "tree":
@@ -84,7 +84,7 @@ def cmd_checkout(args):
             elif obj.fmt == "commit":
                 inner(root, BaseObject.read(repo, obj.tree_sha))
     else:
-        raise Exception("Not a directory (file exists): %s" % root)
+        raise Exception("Not a directory (file exists): {root}")
 
 
 def show_ref_inner(refs, prefix="", only_tags=False, show_path=True):
@@ -92,7 +92,7 @@ def show_ref_inner(refs, prefix="", only_tags=False, show_path=True):
         child = (prefix + "/" if len(prefix) > 0 else "") + k
         if type(v) == str:
             if show_path:
-                print("%s %s" % (v, child))
+                print("{v} {child}")
             else:
                 print(k)
         else:

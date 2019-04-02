@@ -20,9 +20,9 @@ class Repository(object):
         repo = cls(path, force=True)
         if repo.worktree.exists():
             if not repo.worktree.is_dir():
-                raise Exception("Not a directory (file exists): %s" % repo.worktree)
+                raise Exception(f"Not a directory (file exists): {repo.worktree}")
             if list(repo.worktree.glob("*")):
-                raise Exception("Not a empty directory: %s" % repo.worktree)
+                raise Exception(f"Not a empty directory: {repo.worktree}")
         else:
             repo.worktree.mkdir(parents=True)
 
@@ -50,7 +50,7 @@ class Repository(object):
         parent = path.resolve().parent
         if parent == path: # filesystem root
             if required:
-                raise Exception("Not a Git reposiory: %s" % path)
+                raise Exception(f"Not a Git reposiory: {path}")
             else:
                 return None
         else:
@@ -60,7 +60,7 @@ class Repository(object):
         self.worktree = pathlib.Path(path)
         self.gitdir = self.worktree / ".git"
         if not self.gitdir.is_dir() and not force:
-            raise Exception("Not a Git repository: %s" % path)
+            raise Exception(f"Not a Git repository: {path}")
 
         self.conf = configparser.ConfigParser()
         cf = self.file("config")
@@ -72,7 +72,7 @@ class Repository(object):
         if not force:
             ver = int(self.conf.get("core", "repositoryformatversion"))
             if ver != 0 and not force:
-                raise Exception("Unsupported repositoryformatversion: %s" % ver)
+                raise Exception(f"Unsupported repositoryformatversion: {ver}")
 
     def __path(self, *path):
         return functools.reduce(lambda parent, child: parent / child, path, self.gitdir)
@@ -105,11 +105,11 @@ class Repository(object):
                     if p.name.startswith(body)
                     ]
                 if len(candidates) == 0:
-                    raise Exception("Short hash doesn't match any object: %s" % name)
+                    raise Exception(f"Short hash doesn't match any object: {name}")
                 elif len(candidates) == 1:
                     sha = candidates[0]
                 else:
-                    raise Exception("Ambiguous short hash: %s" % name)
+                    raise Exception(f"Ambiguous short hash: {name}")
 
         def inner(refs):
             res = None
@@ -122,7 +122,7 @@ class Repository(object):
         sha = inner(Ref.find_all(self))
 
         if sha is None:
-            raise Exception("name `%s` doesn't match any object." % name)
+            raise Exception(f"name `{name}` doesn't match any object.")
 
         if fmt is None:
             return sha
@@ -136,7 +136,7 @@ class Repository(object):
                 elif obj.fmt == "commit" and fmt == "tree":
                     return inner(obj.tree_sha)
                 else:
-                    raise Exception("No matched object with type %s: %s" % (fmt, name))
+                    raise Exception(f"No matched object with type {fmt}: {name}")
             return inner(sha)
 
     def dir(self, *path, mkdir=False):
@@ -145,7 +145,7 @@ class Repository(object):
             if path.is_dir():
                 return path
             else:
-                raise Exception("Not a directory (file exists): %s" % path)
+                raise Exception(f"Not a directory (file exists): {path}")
         else:
             if mkdir:
                 path.mkdir(parents=True)
@@ -168,7 +168,7 @@ class BaseObject(object):
         fmt = raw[:delim_20].decode("ascii")
         size= int(raw[delim_20:delim_00].decode("ascii"))
         if size != len(raw) - (delim_00 + 1):
-            raise Exception("Malformed object %s: bad length" % sha)
+            raise Exception(f"Malformed object {sha}: bad length")
 
         cls = BaseObject.__get_cls(fmt)
         return cls(repo, sha, raw[delim_00+1:])
@@ -179,7 +179,7 @@ class BaseObject(object):
         elif fmt == "commit" : return Commit
         elif fmt == "tag"    : return Tag
         elif fmt == "tree"   : return Tree
-        else: raise Exception("Unknown object type %s (sha: %s)" % (fmt, sha))
+        else: raise Exception(f"Unknown object type {fmt} (sha: {sha})")
 
     @staticmethod
     def create_from_file(repo, fmt, path):
@@ -301,7 +301,7 @@ class Tag(Commit):
 
     @classmethod
     def create_ref(repo, name, sha):
-        repo.file("refs", "tags", "name").write_text("%s\n" % sha)
+        repo.file("refs", "tags", "name").write_text(f"{sha}\n")
 
     @property
     def object_sha(self):
