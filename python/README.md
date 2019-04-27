@@ -3,7 +3,7 @@ Write Yourself A Git In Python
 
 ### Status
 - [x] init
-- [ ] status
+- [x] status
   - [x] cat-index
   - [x] cat-file
 - [x] rev-parse
@@ -18,3 +18,4 @@ Write Yourself A Git In Python
 - [ ] commit
 - [x] show-ref
 - [x] tag
+- [ ] .gitignore

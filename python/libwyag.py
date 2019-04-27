@@ -476,7 +476,7 @@ class Index(object):
             offset = (8 - (delim_00 - offset) % 8) + delim_00
 
         # extensions
-        tree = None
+        trees = None
         while True:
             try:
                 etype = raw[offset : offset+4].decode()
@@ -487,7 +487,7 @@ class Index(object):
             endmark = offset + size
 
             if etype == "TREE":
-                tree = []
+                trees = []
                 while offset < endmark:
                     delim_00 = raw.find(b"\x00", offset)
                     delim_20 = raw.find(b"\x20", delim_00)
@@ -496,10 +496,10 @@ class Index(object):
                     num_entry = int(raw[delim_00+1 : delim_20].decode())
                     num_tree = int(raw[delim_20+1 : delim_0a].decode())
                     if num_entry == -1:
-                        tree.append(IndexExtTreeEntry(path, num_entry, num_tree, None))
+                        trees.append(IndexExtTreeEntry(path, num_entry, num_tree, None))
                         offset = delim_0a + 1
                     else:
-                        tree.append(IndexExtTreeEntry(
+                        trees.append(IndexExtTreeEntry(
                             path, num_entry, num_tree,
                             byte_to_hex(raw[delim_0a+1 : delim_0a+21]),
                             ))
@@ -507,8 +507,37 @@ class Index(object):
 
             assert offset == endmark
 
-        return cls(entries, tree)
+        return cls(repo, entries, trees)
 
-    def __init__(self, entries, tree):
+    def __init__(self, repo, entries, trees):
+        self.repo = repo
         self.entries = entries
-        self.tree = tree
+        self.trees = trees
+
+    def compare_worktree(self):
+        files = { self.repo.worktree / e.path: e.sha for e in self.entries }
+        tree_paths = [self.repo.worktree / t.path for t in self.trees]
+
+        modified = []
+        untracked = []
+
+        def inner(path):
+            for child in path.iterdir():
+                child = child.resolve()
+                if child == self.repo.gitdir:
+                    continue
+                if child.is_dir():
+                    if child in tree_paths:
+                        inner(child)
+                    elif list(child.glob("*")):
+                        untracked.append(child)
+                else:
+                    if child in files.keys():
+                        sha = BaseObject.create_from_file(None, "blob", child)
+                        if sha != files[child]:
+                            modified.append(child)
+                    else:
+                        untracked.append(child)
+
+        inner(self.repo.worktree)
+        return modified, untracked

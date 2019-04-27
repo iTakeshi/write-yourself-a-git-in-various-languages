@@ -126,11 +126,28 @@ def cmd_cat_index(args):
         print(e)
     print()
 
-    if not index.tree is None:
+    if not index.trees is None:
         print("TREE")
-        for e in index.tree:
+        for e in index.trees:
             print(e)
         print()
+
+
+def cmd_status(args):
+    repo = Repository.find()
+    modified, untracked = Index.read(repo).compare_worktree()
+
+    print("Changes not staged for commit:")
+    print()
+    for m in modified:
+        print(f"        {m.relative_to(repo.worktree)}")
+    print()
+
+    print("Untracked files:")
+    print()
+    for u in untracked:
+        print(f"        {u.relative_to(repo.worktree)}")
+    print()
 
 
 if __name__ == "__main__":
@@ -172,6 +189,8 @@ if __name__ == "__main__":
 
     parser_cat_index = cmd_parser.add_parser("cat-index", help="Show contents of .git/index.")
 
+    parser_status = cmd_parser.add_parser("status", help="Show the working tree status.")
+
     args = parser.parse_args(sys.argv[1:])
     if   args.command == "init"        : cmd_init(args)
     elif args.command == "cat-file"    : cmd_catfile(args)
@@ -183,3 +202,4 @@ if __name__ == "__main__":
     elif args.command == "tag"         : cmd_tag(args)
     elif args.command == "rev-parse"   : cmd_rev_parse(args)
     elif args.command == "cat-index"   : cmd_cat_index(args)
+    elif args.command == "status"      : cmd_status(args)
