@@ -184,13 +184,14 @@ class BaseObject(object):
     def create_from_file(repo, fmt, path):
         data = pathlib.Path(path).read_bytes()
         cls = BaseObject.__get_cls(fmt)
-        return cls(repo, data).write(dry_run=(repo is None))
+        return cls(repo, data=data).write(dry_run=(repo is None))
 
-    def __init__(self, repo, sha, data=None):
+    def __init__(self, repo, sha=None, data=None):
         self.repo = repo
         self.sha = sha
         if not data is None:
             self.deserialize(data)
+            self.sha = self.write(dry_run=True)
 
     def serialize(self):
         raise NotImplementedError
